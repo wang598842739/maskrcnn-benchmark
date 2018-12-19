@@ -106,6 +106,17 @@ class DatasetCatalog(object):
                 factory="PascalVOCDataset",
                 args=args,
             )
+        else:
+            data_dir = "datasets/spire_dataset"
+            if os.path.exists(os.path.join(data_dir, name)):
+                args = dict(
+                    save_path=os.path.join(data_dir, name),
+                    img_dir='scaled_images',
+                )
+                return dict(
+                    factory="SpireDataset",
+                    args=args,
+                )
         raise RuntimeError("Dataset not available: {}".format(name))
 
 
@@ -131,11 +142,20 @@ class ModelCatalog(object):
 
     @staticmethod
     def get(name):
+        if name.startswith("ModelDir"):
+            return ModelCatalog.get_model_in_local_disk(name)
         if name.startswith("Caffe2Detectron/COCO"):
             return ModelCatalog.get_c2_detectron_12_2017_baselines(name)
         if name.startswith("ImageNetPretrained"):
             return ModelCatalog.get_c2_imagenet_pretrained(name)
         raise RuntimeError("model not present in the catalog {}".format(name))
+
+    @staticmethod
+    def get_model_in_local_disk(name):
+        prefix = "models/pre_trained"
+        name = name[len("ModelDir/"):]
+        path = "/".join([prefix, name])
+        return path
 
     @staticmethod
     def get_c2_imagenet_pretrained(name):
