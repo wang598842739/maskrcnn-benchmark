@@ -4,6 +4,7 @@ MODEL:
   BACKBONE:
     CONV_BODY: "R-50-FPN"
     OUT_CHANNELS: 256
+    USE_LIGHT_HEAD: False
   RPN:
     USE_FPN: True
     ANCHOR_STRIDE: (4, 8, 16, 32, 64)

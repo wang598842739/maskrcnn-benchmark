@@ -90,6 +90,9 @@ _C.MODEL.BACKBONE.CONV_BODY = "R-50-C4"
 _C.MODEL.BACKBONE.FREEZE_CONV_BODY_AT = 2
 _C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4
 
+# Ref to Light-Head R-CNN: In Defense of Two-Stage Object Detector
+# https://arxiv.org/abs/1711.07264
+_C.MODEL.BACKBONE.USE_LIGHT_HEAD = False
 
 # ---------------------------------------------------------------------------- #
 # RPN options
