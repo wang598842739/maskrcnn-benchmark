@@ -93,6 +93,7 @@ _C.MODEL.BACKBONE.OUT_CHANNELS = 256 * 4
 # Ref to Light-Head R-CNN: In Defense of Two-Stage Object Detector
 # https://arxiv.org/abs/1711.07264
 _C.MODEL.BACKBONE.USE_LIGHT_HEAD = False
+_C.MODEL.BACKBONE.LIGHT_HEAD_CHANNELS = 128
 
 # ---------------------------------------------------------------------------- #
 # RPN options

@@ -33,7 +33,7 @@ class FPN(nn.Module):
     order, and must be consecutive
     """
 
-    def __init__(self, in_channels_list, out_channels, top_blocks=None, use_light_head=False):
+    def __init__(self, in_channels_list, out_channels, top_blocks=None, use_light_head=False, light_head_chns=64):
         """
         Arguments:
             in_channels_list (list[int]): number of channels for each feature map that
@@ -51,7 +51,7 @@ class FPN(nn.Module):
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
             if self.use_light_head:
-                inner_block_module = LightHeadBlock(in_channels, 128, out_channels)
+                inner_block_module = LightHeadBlock(in_channels, light_head_chns, out_channels)
                 layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
                 for module in [layer_block_module]:
                     # Caffe2 implementation uses XavierFill, which in fact
