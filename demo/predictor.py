@@ -12,7 +12,7 @@ from maskrcnn_benchmark import layers as L
 
 class COCODemo(object):
     # COCO categories for pretty print
-    CATEGORIES = [
+    CATEGORIES_COCO = [
         "__background",
         "person",
         "bicycle",
@@ -96,6 +96,22 @@ class COCODemo(object):
         "toothbrush",
     ]
 
+    CATEGORIES_VISDRONE = [
+        "__background",
+        "awning-tricycle",
+        "bicycle",
+        "bus",
+        "car",
+        "ignored-regions",
+        "motor",
+        "others",
+        "pedestrian",
+        "people",
+        "tricycle",
+        "truck",
+        "van",
+    ]
+
     def __init__(
         self,
         cfg,
@@ -103,6 +119,7 @@ class COCODemo(object):
         show_mask_heatmaps=False,
         masks_per_dim=2,
         min_image_size=224,
+        categories_templete='coco',
     ):
         self.cfg = cfg.clone()
         self.model = build_detection_model(cfg)
@@ -110,6 +127,7 @@ class COCODemo(object):
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)
         self.min_image_size = min_image_size
+        self.categories_templete = categories_templete
 
         save_dir = cfg.OUTPUT_DIR
         checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
@@ -180,6 +198,42 @@ class COCODemo(object):
         result = self.overlay_class_names(result, top_predictions)
 
         return result
+
+    def prediction_to_json_str(self, img_name, prediction, bbox_thrs=0.5):
+        """
+        Arguments:
+            prediction (BoxList): the detected objects. Additional information
+                of the detection properties can be found in the fields of
+                the BoxList via `prediction.fields()`
+
+        Returns:
+            json_str: json string of annotitions
+        """
+        w = prediction.size[0]
+        h = prediction.size[1]
+        json_str = b'{{"file_name":"{:s}","height":{},"width":{},"annos":['.format(img_name, h, w)
+        bbox = prediction.bbox.cpu().numpy()
+        labels = prediction.extra_fields['labels'].cpu().numpy()
+        scores = prediction.extra_fields['scores'].cpu().numpy()
+        if self.categories_templete == 'coco':
+            labels = [self.CATEGORIES_COCO[i] for i in labels]
+        elif self.categories_templete == 'visdrone':
+            labels = [self.CATEGORIES_VISDRONE[i] for i in labels]
+        only_one = True
+        for b in range(bbox.shape[0]):
+            if scores[b] > bbox_thrs:
+                if not only_one:
+                    json_str += b','
+                x = bbox[b, 0]
+                y = bbox[b, 1]
+                w = bbox[b, 2] - x + 1
+                h = bbox[b, 3] - y + 1
+                json_str += b'{{"area":{},"bbox":[{},{},{},{}],"score":{},"category_name":"{}"'.format(
+                            w * h, x, y, w, h, scores[b], labels[b])
+                json_str += b'}'
+                only_one = False
+        json_str += b']}'
+        return json_str
 
     def compute_prediction(self, original_image):
         """
@@ -344,7 +398,10 @@ class COCODemo(object):
         """
         scores = predictions.get_field("scores").tolist()
         labels = predictions.get_field("labels").tolist()
-        labels = [self.CATEGORIES[i] for i in labels]
+        if self.categories_templete == 'coco':
+            labels = [self.CATEGORIES_COCO[i] for i in labels]
+        elif self.categories_templete == 'visdrone':
+            labels = [self.CATEGORIES_VISDRONE[i] for i in labels]
         boxes = predictions.bbox
 
         template = "{}: {:.2f}"

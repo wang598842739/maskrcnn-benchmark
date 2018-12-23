@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ModelDir/R-50.pkl"
+  WEIGHT: "catalog://ModelDir/e2e_faster_rcnn_R_50_FPN_visdrone.pth"
   BACKBONE:
     CONV_BODY: "R-50-FPN"
     OUT_CHANNELS: 256
