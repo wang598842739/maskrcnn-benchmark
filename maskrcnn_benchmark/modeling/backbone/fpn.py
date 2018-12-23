@@ -5,18 +5,19 @@ from torch import nn
 
 
 class LightHeadBlock(nn.Module):
-    def __init__(self, C_in, C_mid, C_out):
+    def __init__(self, C_in, C_mid, C_out, light_head_bias):
         super(LightHeadBlock, self).__init__()
-        self.separable_conv_11 = nn.Conv2d(C_in, C_mid, (15,1), 1, (7,0))
-        self.separable_conv_12 = nn.Conv2d(C_mid, C_out, (1,15), 1, (0,7))
-        self.separable_conv_21 = nn.Conv2d(C_in, C_mid, (15,1), 1, (7,0))
-        self.separable_conv_22 = nn.Conv2d(C_mid, C_out, (1,15), 1, (0,7))
+        self.separable_conv_11 = nn.Conv2d(C_in, C_mid, (15,1), 1, (7,0), bias=light_head_bias)
+        self.separable_conv_12 = nn.Conv2d(C_mid, C_out, (1,15), 1, (0,7), bias=light_head_bias)
+        self.separable_conv_21 = nn.Conv2d(C_in, C_mid, (15,1), 1, (7,0), bias=light_head_bias)
+        self.separable_conv_22 = nn.Conv2d(C_mid, C_out, (1,15), 1, (0,7), bias=light_head_bias)
 
         for module in [self.separable_conv_11, self.separable_conv_12, self.separable_conv_21, self.separable_conv_22]:
             # Caffe2 implementation uses XavierFill, which in fact
             # corresponds to kaiming_uniform_ in PyTorch
             nn.init.kaiming_uniform_(module.weight, a=1)
-            nn.init.constant_(module.bias, 0)
+            if light_head_bias:
+                nn.init.constant_(module.bias, 0)
 
     def forward(self, x):
         sc11 = self.separable_conv_11(x)
@@ -33,7 +34,8 @@ class FPN(nn.Module):
     order, and must be consecutive
     """
 
-    def __init__(self, in_channels_list, out_channels, top_blocks=None, use_light_head=False, light_head_chns=64):
+    def __init__(self, in_channels_list, out_channels, top_blocks=None,
+                 use_light_head=False, light_head_chns=(-1,), light_head_bias=True):
         """
         Arguments:
             in_channels_list (list[int]): number of channels for each feature map that
@@ -51,7 +53,13 @@ class FPN(nn.Module):
             inner_block = "fpn_inner{}".format(idx)
             layer_block = "fpn_layer{}".format(idx)
             if self.use_light_head:
-                inner_block_module = LightHeadBlock(in_channels, light_head_chns, out_channels)
+                assert len(in_channels_list) == len(light_head_chns), \
+                    "Length of BACKBONE.LIGHT_HEAD_CHANNELS should be equal with in_channels_list."
+                if light_head_chns[idx-1] > 0:
+                    inner_block_module = LightHeadBlock(in_channels, light_head_chns[idx-1],
+                                                        out_channels, light_head_bias)
+                else:
+                    inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
                 layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
                 for module in [layer_block_module]:
                     # Caffe2 implementation uses XavierFill, which in fact
