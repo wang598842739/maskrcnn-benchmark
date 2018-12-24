@@ -83,10 +83,9 @@ def main():
 
     annotation_dir = os.path.join(args.output_dir, 'annotations')
     vis_dir = os.path.join(args.output_dir, 'vis')
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    if not os.path.exists(annotation_dir):
         os.makedirs(annotation_dir)
-        os.makedirs(vis_dir)
+        # os.makedirs(vis_dir)
 
     for f in os.listdir(args.image_dir):
         if f.endswith('.png') or f.endswith('.jpg') or f.endswith('.jpeg'):
