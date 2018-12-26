@@ -60,12 +60,11 @@ class FPN(nn.Module):
                                                         out_channels, light_head_bias)
                 else:
                     inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
+                    nn.init.kaiming_uniform_(inner_block_module.weight, a=1)
+                    nn.init.constant_(inner_block_module.bias, 0)
                 layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
-                for module in [layer_block_module]:
-                    # Caffe2 implementation uses XavierFill, which in fact
-                    # corresponds to kaiming_uniform_ in PyTorch
-                    nn.init.kaiming_uniform_(module.weight, a=1)
-                    nn.init.constant_(module.bias, 0)
+                nn.init.kaiming_uniform_(layer_block_module.weight, a=1)
+                nn.init.constant_(layer_block_module.bias, 0)
             else:
                 inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
                 layer_block_module = nn.Conv2d(out_channels, out_channels, 3, 1, 1)
