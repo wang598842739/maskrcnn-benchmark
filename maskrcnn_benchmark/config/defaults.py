@@ -33,6 +33,14 @@ _C.MODEL.WEIGHT = ""
 
 
 # -----------------------------------------------------------------------------
+# DEBUG
+# -----------------------------------------------------------------------------
+_C.DEBUG = CN()
+# Debug matching degree between anchor and target boxes
+_C.DEBUG.ANCHOR_MATCHED = False
+
+
+# -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------
 _C.INPUT = CN()
@@ -141,7 +149,10 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 # Custom rpn head, empty to use default conv or separable conv
 _C.MODEL.RPN.RPN_HEAD = "SingleConvRPNHead"
-
+# Global convolutional network (GCN) RPN head parameters, "GlobalConvRPNHead"
+_C.MODEL.RPN.GCN_CHANNELS = 64
+_C.MODEL.RPN.GCN_NON_SHARED = True
+# _C.MODEL.RPN.GCN_CONV_BIAS = True
 
 # ---------------------------------------------------------------------------- #
 # ROI HEADS options
@@ -252,7 +263,7 @@ _C.SOLVER.WARMUP_FACTOR = 1.0 / 3
 _C.SOLVER.WARMUP_ITERS = 500
 _C.SOLVER.WARMUP_METHOD = "linear"
 
-_C.SOLVER.CHECKPOINT_PERIOD = 2500
+_C.SOLVER.CHECKPOINT_PERIOD = 10000
 
 # Number of images per batch
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 16, each GPU will

@@ -36,6 +36,8 @@ class RPNLossComputation(object):
     def match_targets_to_anchors(self, anchor, target):
         match_quality_matrix = boxlist_iou(target, anchor)
         matched_idxs = self.proposal_matcher(match_quality_matrix)
+        # num_matched_gt = torch.nonzero(matched_idxs >= 0)
+
         # RPN doesn't need any fields from target
         # for creating the labels, so clear them all
         target = target.copy_with_fields([])
@@ -48,6 +50,18 @@ class RPNLossComputation(object):
         return matched_targets
 
     def prepare_targets(self, anchors, targets):
+        """
+        Arguments:
+            anchors, targets: (list[BoxList])
+                                    |--bbox: Tensor[nx4]
+                                    |--extra_fields:
+                                        |--visibility: Tensor[n]
+                                    |--mode: 'xyxy'
+                                    |--size: (width, height)
+        Returns:
+            labels: (list[Tensor[n]])
+            regression_targets: (list[Tensor[nx4]])
+        """
         labels = []
         regression_targets = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
@@ -85,7 +99,7 @@ class RPNLossComputation(object):
 
         Returns:
             objectness_loss (Tensor)
-            box_loss (Tensor
+            box_loss (Tensor)
         """
         anchors = [cat_boxlist(anchors_per_image) for anchors_per_image in anchors]
         labels, regression_targets = self.prepare_targets(anchors, targets)
@@ -141,6 +155,7 @@ def make_rpn_loss_evaluator(cfg, box_coder):
         cfg.MODEL.RPN.FG_IOU_THRESHOLD,
         cfg.MODEL.RPN.BG_IOU_THRESHOLD,
         allow_low_quality_matches=True,
+        debug_matching=cfg.DEBUG.ANCHOR_MATCHED,
     )
 
     fg_bg_sampler = BalancedPositiveNegativeSampler(

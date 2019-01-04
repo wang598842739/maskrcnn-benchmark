@@ -2,6 +2,11 @@
 import torch
 
 
+global total_num_gt, total_num_matched_gt
+total_num_gt = 0
+total_num_matched_gt = 0
+
+
 class Matcher(object):
     """
     This class assigns to each predicted "element" (e.g., a box) a ground-truth
@@ -20,7 +25,8 @@ class Matcher(object):
     BELOW_LOW_THRESHOLD = -1
     BETWEEN_THRESHOLDS = -2
 
-    def __init__(self, high_threshold, low_threshold, allow_low_quality_matches=False):
+    def __init__(self, high_threshold, low_threshold, allow_low_quality_matches=False,
+                 debug_matching=False):
         """
         Args:
             high_threshold (float): quality values greater than or equal to
@@ -38,6 +44,7 @@ class Matcher(object):
         self.high_threshold = high_threshold
         self.low_threshold = low_threshold
         self.allow_low_quality_matches = allow_low_quality_matches
+        self.debug_matching = debug_matching
 
     def __call__(self, match_quality_matrix):
         """
@@ -62,6 +69,16 @@ class Matcher(object):
                     "during training")
 
         # match_quality_matrix is M (gt) x N (predicted)
+        if self.debug_matching:
+            matched_vals_gt, matches_gt = match_quality_matrix.max(dim=1)
+            num_gt = matched_vals_gt.numel()
+            num_matched_gt = torch.nonzero(matched_vals_gt >= self.high_threshold).numel()
+            global total_num_gt, total_num_matched_gt
+            total_num_gt += num_gt
+            total_num_matched_gt += num_matched_gt
+            print("DEBUG.ANCHOR_MATCHED: {} ({}/{})".format(
+                float(total_num_matched_gt)/total_num_gt, total_num_matched_gt, total_num_gt))
+
         # Max over gt elements (dim 0) to find best gt candidate for each prediction
         matched_vals, matches = match_quality_matrix.max(dim=0)
         if self.allow_low_quality_matches:

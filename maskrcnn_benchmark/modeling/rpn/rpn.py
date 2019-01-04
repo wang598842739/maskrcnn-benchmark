@@ -46,6 +46,66 @@ class RPNHead(nn.Module):
         return logits, bbox_reg
 
 
+@registry.RPN_HEADS.register("GlobalConvRPNHead")
+class GlobalRPNHead(nn.Module):
+    """
+    Adds a global convolutional network (GCN) RPN Head with classification and regression heads
+    """
+
+    def __init__(self, cfg, in_channels, num_anchors):
+        """
+        Arguments:
+            cfg              : config
+            in_channels (int): number of channels of the input feature
+            num_anchors (int): number of anchors to be predicted
+        """
+        super(GlobalRPNHead, self).__init__()
+        self.cfg = cfg
+        self.conv_s1 = nn.Conv2d(
+            in_channels, cfg.MODEL.RPN.GCN_CHANNELS, kernel_size=1, stride=1
+        )
+        self.bn_s1 = nn.BatchNorm2d(cfg.MODEL.RPN.GCN_CHANNELS)
+        self.conv_15_01 = nn.Conv2d(cfg.MODEL.RPN.GCN_CHANNELS, cfg.MODEL.RPN.GCN_CHANNELS, (15, 1), 1, (7, 0))
+        self.conv_01_15 = nn.Conv2d(cfg.MODEL.RPN.GCN_CHANNELS, cfg.MODEL.RPN.GCN_CHANNELS, (1, 15), 1, (0, 7))
+        self.conv_e1 = nn.Conv2d(
+            cfg.MODEL.RPN.GCN_CHANNELS, in_channels, kernel_size=1, stride=1
+        )
+        self.bn_e1 = nn.BatchNorm2d(in_channels)
+        self.conv_k3 = nn.Conv2d(
+            in_channels, in_channels, kernel_size=3, stride=1, padding=1
+        )
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        self.bbox_pred = nn.Conv2d(
+            in_channels, num_anchors * 4, kernel_size=1, stride=1
+        )
+
+        for l in [self.conv_s1, self.conv_15_01, self.conv_01_15, self.conv_e1, self.conv_k3,
+                  self.cls_logits, self.bbox_pred]:
+            torch.nn.init.normal_(l.weight, std=0.01)
+            torch.nn.init.constant_(l.bias, 0)
+
+    def forward(self, x):
+        logits = []
+        bbox_reg = []
+        for feature in x:
+            t_s1 = F.relu(self.bn_s1(self.conv_s1(feature)))
+            gcn1 = self.conv_15_01(self.conv_01_15(t_s1))
+            gcn2 = self.conv_01_15(self.conv_15_01(t_s1))
+            gcn = F.relu(self.bn_s1(gcn1 + gcn2))
+            gcnf = F.relu(self.bn_e1(self.conv_e1(gcn)))
+            t_s2 = feature + gcnf
+            if self.cfg.MODEL.RPN.GCN_NON_SHARED:
+                t1 = F.relu(self.bn_e1(self.conv_k3(t_s2)))
+                t2 = F.relu(self.bn_e1(self.conv_k3(t_s2)))
+                logits.append(self.cls_logits(t1))
+                bbox_reg.append(self.bbox_pred(t2))
+            else:
+                t = F.relu(self.bn_e1(self.conv_k3(t_s2)))
+                logits.append(self.cls_logits(t))
+                bbox_reg.append(self.bbox_pred(t))
+        return logits, bbox_reg
+
+
 class RPNModule(torch.nn.Module):
     """
     Module for RPN computation. Takes feature maps from the backbone and RPN
