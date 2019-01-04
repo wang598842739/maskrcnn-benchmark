@@ -76,15 +76,31 @@ def boxlist_iou(boxlist1, boxlist2):
 
     box1, box2 = boxlist1.bbox, boxlist2.bbox
 
-    lt = torch.max(box1[:, None, :2], box2[:, :2])  # [N,M,2]
-    rb = torch.min(box1[:, None, 2:], box2[:, 2:])  # [N,M,2]
+    if N >= 100:  # u can change the number here
+        device = box1.device
+        box1 = box1.cpu() # ground-truths
+        box2 = box2.cpu() # predictions
 
-    TO_REMOVE = 1
+        lt = torch.max(box1[:, None, :2], box2[:, :2]).cpu()  # [N,M,2]
+        rb = torch.min(box1[:, None, 2:], box2[:, 2:]).cpu()  # [N,M,2]
 
-    wh = (rb - lt + TO_REMOVE).clamp(min=0)  # [N,M,2]
-    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+        TO_REMOVE = 1
 
-    iou = inter / (area1[:, None] + area2 - inter)
+        wh = (rb - lt + TO_REMOVE).clamp(min=0).cpu()  # [N,M,2]
+        inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+        iou = inter.cpu() / (area1[:, None].cpu() + area2.cpu() - inter.cpu())
+        iou = iou.to(device)
+    else:
+        lt = torch.max(box1[:, None, :2], box2[:, :2])  # [N,M,2]
+        rb = torch.min(box1[:, None, 2:], box2[:, 2:])  # [N,M,2]
+
+        TO_REMOVE = 1
+
+        wh = (rb - lt + TO_REMOVE).clamp(min=0)  # [N,M,2]
+        inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+        iou = inter / (area1[:, None] + area2 - inter)
     return iou
 
 
