@@ -50,7 +50,7 @@ def remove_small_boxes(boxlist, min_size):
 
 # implementation from https://github.com/kuangliu/torchcv/blob/master/torchcv/utils/box.py
 # with slight modifications
-def boxlist_iou(boxlist1, boxlist2):
+def boxlist_iou(boxlist1, boxlist2, ignored_regions_iou=False):
     """Compute the intersection over union of two set of boxes.
     The box order must be (xmin, ymin, xmax, ymax).
 
@@ -75,6 +75,10 @@ def boxlist_iou(boxlist1, boxlist2):
     area2 = boxlist2.area()
 
     box1, box2 = boxlist1.bbox, boxlist2.bbox
+    if ignored_regions_iou:
+        box1 = boxlist1.ignored_regions
+        N = len(box1)
+        area1 = boxlist1.area_ignored_regions()
 
     if N >= 100:  # u can change the number here
         device = box1.device

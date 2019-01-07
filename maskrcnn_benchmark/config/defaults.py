@@ -149,6 +149,8 @@ _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TRAIN = 2000
 _C.MODEL.RPN.FPN_POST_NMS_TOP_N_TEST = 2000
 # Custom rpn head, empty to use default conv or separable conv
 _C.MODEL.RPN.RPN_HEAD = "SingleConvRPNHead"
+# Avoid negative sampling on ignored regions
+_C.MODEL.RPN.HANDLE_IGNORED_REGIONS = False
 # Global convolutional network (GCN) RPN head parameters, "GlobalConvRPNHead"
 _C.MODEL.RPN.GCN_CHANNELS = 64
 _C.MODEL.RPN.GCN_NON_SHARED = True

@@ -21,7 +21,7 @@ class RPNLossComputation(object):
     This class computes the RPN loss.
     """
 
-    def __init__(self, proposal_matcher, fg_bg_sampler, box_coder):
+    def __init__(self, proposal_matcher, fg_bg_sampler, box_coder, handle_ignored_regions=False):
         """
         Arguments:
             proposal_matcher (Matcher)
@@ -32,6 +32,7 @@ class RPNLossComputation(object):
         self.proposal_matcher = proposal_matcher
         self.fg_bg_sampler = fg_bg_sampler
         self.box_coder = box_coder
+        self.handle_ignored_regions = handle_ignored_regions
 
     def match_targets_to_anchors(self, anchor, target):
         match_quality_matrix = boxlist_iou(target, anchor)
@@ -47,6 +48,15 @@ class RPNLossComputation(object):
         # out of bounds
         matched_targets = target[matched_idxs.clamp(min=0)]
         matched_targets.add_field("matched_idxs", matched_idxs)
+
+        # add support for ignored regions, avoid negative sampling on it
+        if target.ignored_regions is not None and self.handle_ignored_regions:
+            match_ignored_matrix = boxlist_iou(target, anchor, ignored_regions_iou=True)
+            # Max over gt elements (dim 0) to find best ignored candidate for each prediction
+            matched_ignored_vals, matched_ignored_idxs = match_ignored_matrix.max(dim=0)
+            matched_ignored_idxs[matched_ignored_vals > 0.1] = -1
+            matched_targets.add_field("matched_ignored_idxs", matched_ignored_idxs)
+
         return matched_targets
 
     def prepare_targets(self, anchors, targets):
@@ -78,6 +88,10 @@ class RPNLossComputation(object):
             # discard indices that are between thresholds
             inds_to_discard = matched_idxs == Matcher.BETWEEN_THRESHOLDS
             labels_per_image[inds_to_discard] = -1
+
+            if targets_per_image.ignored_regions is not None and self.handle_ignored_regions:
+                matched_ignored_idxs = matched_targets.get_field("matched_ignored_idxs")
+                labels_per_image[matched_ignored_idxs == -1] = -1
 
             # compute regression targets
             regression_targets_per_image = self.box_coder.encode(
@@ -162,5 +176,6 @@ def make_rpn_loss_evaluator(cfg, box_coder):
         cfg.MODEL.RPN.BATCH_SIZE_PER_IMAGE, cfg.MODEL.RPN.POSITIVE_FRACTION
     )
 
-    loss_evaluator = RPNLossComputation(matcher, fg_bg_sampler, box_coder)
+    loss_evaluator = RPNLossComputation(matcher, fg_bg_sampler, box_coder,
+                                        cfg.MODEL.RPN.HANDLE_IGNORED_REGIONS)
     return loss_evaluator
