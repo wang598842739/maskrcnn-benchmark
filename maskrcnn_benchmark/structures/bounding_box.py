@@ -16,9 +16,12 @@ class BoxList(object):
     labels.
     """
 
-    def __init__(self, bbox, image_size, mode="xyxy"):
+    def __init__(self, bbox, image_size, mode="xyxy", ignored_regions=None):
         device = bbox.device if isinstance(bbox, torch.Tensor) else torch.device("cpu")
         bbox = torch.as_tensor(bbox, dtype=torch.float32, device=device)
+        if ignored_regions is not None:
+            ignored_regions = torch.as_tensor(ignored_regions, dtype=torch.float32, device=device)
+
         if bbox.ndimension() != 2:
             raise ValueError(
                 "bbox should have 2 dimensions, got {}".format(bbox.ndimension())
@@ -31,6 +34,7 @@ class BoxList(object):
         if mode not in ("xyxy", "xywh"):
             raise ValueError("mode should be 'xyxy' or 'xywh'")
 
+        self.ignored_regions = ignored_regions
         self.bbox = bbox
         self.size = image_size  # (image_width, image_height)
         self.mode = mode
@@ -59,16 +63,27 @@ class BoxList(object):
             return self
         # we only have two modes, so don't need to check
         # self.mode
+        ignored_regions = None
+        N = len(self.bbox)
+        if self.ignored_regions is not None:
+            self.bbox = torch.cat((self.bbox, self.ignored_regions), dim=0)
+
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if mode == "xyxy":
             bbox = torch.cat((xmin, ymin, xmax, ymax), dim=-1)
-            bbox = BoxList(bbox, self.size, mode=mode)
+            if self.ignored_regions is not None:
+                ignored_regions = bbox[N:]
+                bbox = bbox[:N]
+            bbox = BoxList(bbox, self.size, mode=mode, ignored_regions=ignored_regions)
         else:
             TO_REMOVE = 1
             bbox = torch.cat(
                 (xmin, ymin, xmax - xmin + TO_REMOVE, ymax - ymin + TO_REMOVE), dim=-1
             )
-            bbox = BoxList(bbox, self.size, mode=mode)
+            if self.ignored_regions is not None:
+                ignored_regions = bbox[N:]
+                bbox = bbox[:N]
+            bbox = BoxList(bbox, self.size, mode=mode, ignored_regions=ignored_regions)
         bbox._copy_extra_fields(self)
         return bbox
 
@@ -96,11 +111,21 @@ class BoxList(object):
             (width, height).
         """
 
+        ignored_regions = None
+        N = len(self.bbox)
+        # scale with ignored regions, merge it into self.bbox
+        if self.ignored_regions is not None:
+            self.bbox = torch.cat((self.bbox, self.ignored_regions), dim=0)
+
         ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(size, self.size))
         if ratios[0] == ratios[1]:
             ratio = ratios[0]
             scaled_box = self.bbox * ratio
-            bbox = BoxList(scaled_box, size, mode=self.mode)
+            # scale with ignored regions
+            if self.ignored_regions is not None:
+                ignored_regions = scaled_box[N:]
+                scaled_box = scaled_box[:N]
+            bbox = BoxList(scaled_box, size, mode=self.mode, ignored_regions=ignored_regions)
             # bbox._copy_extra_fields(self)
             for k, v in self.extra_fields.items():
                 if not isinstance(v, torch.Tensor):
@@ -117,7 +142,11 @@ class BoxList(object):
         scaled_box = torch.cat(
             (scaled_xmin, scaled_ymin, scaled_xmax, scaled_ymax), dim=-1
         )
-        bbox = BoxList(scaled_box, size, mode="xyxy")
+        # scale with ignored regions
+        if self.ignored_regions is not None:
+            ignored_regions = scaled_box[N:]
+            scaled_box = scaled_box[:N]
+        bbox = BoxList(scaled_box, size, mode="xyxy", ignored_regions=ignored_regions)
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -139,6 +168,12 @@ class BoxList(object):
                 "Only FLIP_LEFT_RIGHT and FLIP_TOP_BOTTOM implemented"
             )
 
+        ignored_regions = None
+        N = len(self.bbox)
+        # transpose with ignored regions, merge it into self.bbox
+        if self.ignored_regions is not None:
+            self.bbox = torch.cat((self.bbox, self.ignored_regions), dim=0)
+
         image_width, image_height = self.size
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         if method == FLIP_LEFT_RIGHT:
@@ -156,7 +191,11 @@ class BoxList(object):
         transposed_boxes = torch.cat(
             (transposed_xmin, transposed_ymin, transposed_xmax, transposed_ymax), dim=-1
         )
-        bbox = BoxList(transposed_boxes, self.size, mode="xyxy")
+        # transpose with ignored regions
+        if self.ignored_regions is not None:
+            ignored_regions = transposed_boxes[N:]
+            transposed_boxes = transposed_boxes[:N]
+        bbox = BoxList(transposed_boxes, self.size, mode="xyxy", ignored_regions=ignored_regions)
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -170,6 +209,12 @@ class BoxList(object):
         4-tuple defining the left, upper, right, and lower pixel
         coordinate.
         """
+        ignored_regions = None
+        N = len(self.bbox)
+        # crop with ignored regions, merge it into self.bbox
+        if self.ignored_regions is not None:
+            self.bbox = torch.cat((self.bbox, self.ignored_regions), dim=0)
+
         xmin, ymin, xmax, ymax = self._split_into_xyxy()
         w, h = box[2] - box[0], box[3] - box[1]
         cropped_xmin = (xmin - box[0]).clamp(min=0, max=w)
@@ -184,7 +229,11 @@ class BoxList(object):
         cropped_box = torch.cat(
             (cropped_xmin, cropped_ymin, cropped_xmax, cropped_ymax), dim=-1
         )
-        bbox = BoxList(cropped_box, (w, h), mode="xyxy")
+        # crop with ignored regions
+        if self.ignored_regions is not None:
+            ignored_regions = cropped_box[N:]
+            cropped_box = cropped_box[:N]
+        bbox = BoxList(cropped_box, (w, h), mode="xyxy", ignored_regions=ignored_regions)
         # bbox._copy_extra_fields(self)
         for k, v in self.extra_fields.items():
             if not isinstance(v, torch.Tensor):
@@ -195,7 +244,7 @@ class BoxList(object):
     # Tensor-like methods
 
     def to(self, device):
-        bbox = BoxList(self.bbox.to(device), self.size, self.mode)
+        bbox = BoxList(self.bbox.to(device), self.size, self.mode, self.ignored_regions)
         for k, v in self.extra_fields.items():
             if hasattr(v, "to"):
                 v = v.to(device)
@@ -203,7 +252,7 @@ class BoxList(object):
         return bbox
 
     def __getitem__(self, item):
-        bbox = BoxList(self.bbox[item], self.size, self.mode)
+        bbox = BoxList(self.bbox[item], self.size, self.mode, self.ignored_regions)
         for k, v in self.extra_fields.items():
             bbox.add_field(k, v[item])
         return bbox
@@ -212,11 +261,22 @@ class BoxList(object):
         return self.bbox.shape[0]
 
     def clip_to_image(self, remove_empty=True):
+        N = len(self.bbox)
+        # clip_to_image with ignored regions, merge it into self.bbox
+        if self.ignored_regions is not None:
+            self.bbox = torch.cat((self.bbox, self.ignored_regions), dim=0)
+
         TO_REMOVE = 1
         self.bbox[:, 0].clamp_(min=0, max=self.size[0] - TO_REMOVE)
         self.bbox[:, 1].clamp_(min=0, max=self.size[1] - TO_REMOVE)
         self.bbox[:, 2].clamp_(min=0, max=self.size[0] - TO_REMOVE)
         self.bbox[:, 3].clamp_(min=0, max=self.size[1] - TO_REMOVE)
+
+        # clip_to_image with ignored regions
+        if self.ignored_regions is not None:
+            self.ignored_regions = self.bbox[N:]
+            self.bbox = self.bbox[:N]
+
         if remove_empty:
             box = self.bbox
             keep = (box[:, 3] > box[:, 1]) & (box[:, 2] > box[:, 0])
@@ -236,7 +296,7 @@ class BoxList(object):
         return area
 
     def copy_with_fields(self, fields):
-        bbox = BoxList(self.bbox, self.size, self.mode)
+        bbox = BoxList(self.bbox, self.size, self.mode, self.ignored_regions)
         if not isinstance(fields, (list, tuple)):
             fields = [fields]
         for field in fields:

@@ -43,13 +43,21 @@ class SpireDataset(torchvision.datasets.coco.CocoDetection):
     def __getitem__(self, idx):
         img, anno = super(SpireDataset, self).__getitem__(idx)
 
+        img_id = self.ids[idx]
+        img_json = self.coco.loadImgs(img_id)[0]
+
+        ignored_regions = None
+        if "ignored_regions" in img_json.keys():
+            ignored_regions = img_json["ignored_regions"]
+            ignored_regions = torch.as_tensor(ignored_regions).reshape(-1, 4)
+
         # filter crowd annotations
         # TODO might be better to add an extra field
         anno = [obj for obj in anno if obj["iscrowd"] == 0]
 
         boxes = [obj["bbox"] for obj in anno]
         boxes = torch.as_tensor(boxes).reshape(-1, 4)  # guard against no boxes
-        target = BoxList(boxes, img.size, mode="xywh").convert("xyxy")
+        target = BoxList(boxes, img.size, mode="xywh", ignored_regions=ignored_regions).convert("xyxy")
 
         classes = [obj["category_id"] for obj in anno]
         classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
